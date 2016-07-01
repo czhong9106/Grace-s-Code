@@ -1,1 +1,126 @@
-#My thesis R code
+
+# import data.txt
+mrped<-read.table("mrped.txt")
+mrcov<-read.table("mrcov.txt",header=T)
+mrpheno<-read.table("mrpheno.txt",header=T)
+mrscore<-read.table("mrscore.txt",header=T)
+effectdis<-read.table("effectsize.txt",header=T)
+
+# convert A/T/C/G into numeric value
+
+data2 <- matrix(rep(0,dim(mrped)[[1]]*((ncol(mrped)-6)/2)),ncol=((ncol(mrped)-6)/2))
+data2 <- as.data.frame(data2)
+colnames(data2) <- paste("SNP",1:((ncol(mrped)-6)/2),sep="")
+names(data2)
+j=1
+
+for (i in seq(7,dim(mrped)[[2]],by=2))
+{
+        geno<-as.matrix(mrped[,c(i,i+1)])
+        testSNP<-unique(as.vector(as.matrix(mrped[,c(i,i+1)])))
+        
+        if (i>=29) break;
+        
+        for (k in j:((ncol(mrped)-6)/2))
+        {
+                data2[,k] <- apply(geno == testSNP,1,sum)
+                j=j+1
+                break;
+        }
+        if (j==12) break;
+}
+
+
+
+
+#convert ATCG into integer
+
+library(stringr)
+func<-function(x){str_count(x,pattern="C")}
+trans_snp<-sapply(mrped[,c(7:17)],func)
+mrped[,c(7:17)]<-trans_snp
+
+# create a new data frame in order to calculate continuous outcome Y
+
+data<-cbind(subset.data.frame(mrcov,select=c(2:5),drop=F),
+            subset.data.frame(mrpheno,select=c(3,6),drop=F))
+
+# multiple effectize 
+
+effect<-subset.matrix(effectdis,select=c(2,3),drop=F)
+effect<-effect[c(3,5,4,2,1),]
+trans_effect<-t(effect$EffectSize)
+finaldata<-data[,c(2:6)]*matrix(rep(trans_effect,n),nrow=n,byrow=T)
+
+# calculate SStot
+finaldata$Y_hat<-apply(finaldata,MARGIN = 1,sum) # ???? #
+mean_Y<-mean(finaldata$Y_hat)
+SSreg<-sum(sapply(finaldata$Y,function(x){(x-mean_Y)^2}))
+
+# df(res)=samplesize-#ofparameters=10000-5=99995
+# Calculate MSE
+Rsquare=0.85
+
+SSres=SSreg*(1-Rsquare)/Rsquare
+
+n=10000   # sample size n
+
+p=5
+        
+MSE=SSres/(n-p)
+
+#rename SNPs, find significant and non-significant SNP
+library(plyr)
+mrped<-rename(mrped,c(snp1="rs1030431",snp2="rs1042034",snp3="rs1084651",snp4="rs11057244"
+                      ,snp5="rs11789603",snp6="rs374",snp7="rs375",snp8="rs376",snp9="rs377"
+                      ,snp10="rs378",snp11="rs6016382"))
+
+
+
+finaldata$Y=finaldata$Y_hat+rnorm(n,0,MSE)
+
+Xname=c("SEX","SMOKE","T2D")
+        
+X=mrcov[,Xname] 
+
+Y=finaldata[,"Y"]
+
+i=? # for loop 
+        
+Z=mrped[,i] # test singel SNP as instrumental varibale 
+
+D=mrpheno[,"LDL"] 
+
+model5iv=ivmodel(Y,D,Z,X, intercept = TRUE,beta0 = 0, alpha = 0.05, 
+k = c(0, 1), heteroSE = FALSE, clusterID = NULL,deltarange = NULL)
+
+# Multiple regression equation
+
+Z=mrped[,c(7,ncol(mrped))]
+
+# Pinciple Components Analysis
+
+i<-c(7:ncol(mrped_single))
+
+pathway1<-sample(i,5,replace=F)
+
+X<-as.matrix(mrped_single[,c(pathway1)])
+
+E <- eigen(t(X) %*% X)
+
+round(E$vec, 3)
+
+NX <- scale(X)
+
+ENX <- NX %*% E$vec
+
+pathway2 <- setdiff(i,pathway1)
+
+# choose Comp1 and Comp2 to analyze 
+
+Z=ENX[,c(1,2)]
+
+
+
+
+
